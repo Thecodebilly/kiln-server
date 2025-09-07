@@ -5,7 +5,7 @@ import sqlite3
 app = Flask(__name__)
 DB_FILE = "temperature.db"
 
-# Initialize SQLite database
+# Initialize SQLite
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -22,22 +22,45 @@ def init_db():
 
 init_db()
 
-# HTML template for dashboard
 dashboard_html = """
 <html>
 <head>
     <title>ESP32 Temperature Dashboard</title>
     <meta http-equiv="refresh" content="10">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.1.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         body { font-family: Arial; background: #f2f2f2; text-align: center; }
         h1 { color: #333; }
         canvas { max-width: 900px; margin: auto; display: block; }
+        table { margin: auto; border-collapse: collapse; width: 60%; margin-top: 20px;}
+        th, td { padding: 10px; border: 1px solid #999; }
+        th { background: #555; color: white; }
+        td { background: white; text-align: center; }
     </style>
 </head>
 <body>
     <h1>ESP32 Temperature Dashboard</h1>
     <canvas id="tempChart"></canvas>
+
+    <h2>Device Values</h2>
+    <table>
+        <tr>
+            <th>Device</th>
+            <th>Latest Temp</th>
+            <th>Min Temp</th>
+            <th>Max Temp</th>
+        </tr>
+        {% for device, data in devices.items() %}
+        <tr>
+            <td>{{ device }}</td>
+            <td>{{ data.latest }}</td>
+            <td>{{ data.min }}</td>
+            <td>{{ data.max }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
     <script>
         const ctx = document.getElementById('tempChart').getContext('2d');
         const labels = {{ timestamps|safe }};
@@ -46,33 +69,35 @@ dashboard_html = """
         {% for device, data in devices.items() %}
             datasets.push({
                 label: '{{ device }}',
-                data: {{ data.temps|safe }},
+                data: {{ data.history|safe }},
                 borderColor: '{{ data.color }}',
                 fill: false,
                 tension: 0.1
             });
         {% endfor %}
 
-        new Chart(ctx, {
+        const tempChart = new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: datasets
-            },
+            data: { labels: labels, datasets: datasets },
             options: {
-                scales: {
-                    y: { beginAtZero: true }
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    zoom: {
+                        pan: { enabled: true, mode: 'x' },
+                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                    }
                 }
-            }
+            },
+            plugins: [ChartZoomPlugin]
         });
     </script>
 </body>
 </html>
 """
 
+
 colors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta"]
 
-# Endpoint to receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     content = request.json
@@ -91,23 +116,6 @@ def update_data():
 
     return jsonify({"status": "ok"})
 
-# JSON API endpoint
-@app.route('/get', methods=['GET'])
-def get_data():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
-    rows = c.fetchall()
-    conn.close()
-
-    data = {}
-    for device_id, temp, timestamp in rows:
-        if device_id not in data:
-            data[device_id] = []
-        data[device_id].append({"temperature": temp, "timestamp": timestamp})
-    return jsonify(data)
-
-# Dashboard endpoint
 @app.route('/dashboard', methods=['GET'])
 def dashboard():
     conn = sqlite3.connect(DB_FILE)
@@ -120,10 +128,38 @@ def dashboard():
     all_timestamps = sorted(list({ts for _, _, ts in rows}))
     for device_id, temp, ts in rows:
         if device_id not in devices:
-            devices[device_id] = {"temps": [], "color": colors[len(devices) % len(colors)]}
-        devices[device_id]["temps"].append(temp)
+            devices[device_id] = {
+                "history": [],
+                "latest": temp,
+                "min": temp,
+                "max": temp,
+                "color": colors[len(devices) % len(colors)]
+            }
+        devices[device_id]["history"].append(temp)
+        devices[device_id]["latest"] = temp
+        devices[device_id]["min"] = min(devices[device_id]["min"], temp)
+        devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
     return render_template_string(dashboard_html, devices=devices, timestamps=all_timestamps)
+
+@app.route('/get', methods=['GET'])
+def get_data():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
+    rows = c.fetchall()
+    conn.close()
+
+    data = {}
+    for device_id, temp, timestamp in rows:
+        if device_id not in data:
+            data[device_id] = {"history": [], "latest": temp, "min": temp, "max": temp}
+        data[device_id]["history"].append({"temperature": temp, "timestamp": timestamp})
+        data[device_id]["latest"] = temp
+        data[device_id]["min"] = min(data[device_id]["min"], temp)
+        data[device_id]["max"] = max(data[device_id]["max"], temp)
+
+    return jsonify(data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
