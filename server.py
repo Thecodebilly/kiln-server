@@ -27,8 +27,9 @@ init_db()
 dashboard_html = """
 <html>
 <head>
-    <title>Temperature Dashboard</title>
+    <title>ESP32 Temperature Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.1.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
         h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
@@ -62,6 +63,8 @@ dashboard_html = """
     <div class="footer">Updated automatically from ESP32 devices.</div>
 
     <script>
+        Chart.register(ChartZoom); // Register zoom plugin
+
         const ctx = document.getElementById('tempChart').getContext('2d');
         const labels = {{ timestamps|safe }};
         const datasets = [];
@@ -71,7 +74,7 @@ dashboard_html = """
             label: '{{ device }}',
             data: {{ data.history|safe }},
             borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55', // semi-transparent fill if needed
+            backgroundColor: '{{ data.color }}55',
             fill: false,
             tension: 0.2,
             pointRadius: 4,
@@ -86,7 +89,11 @@ dashboard_html = """
                 responsive: true,
                 plugins: {
                     legend: { position: 'top', labels: { font: { size: 16 } } },
-                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } }
+                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } },
+                    zoom: {
+                        pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' }, // Pan along X-axis with Ctrl
+                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' } // Zoom along X-axis
+                    }
                 },
                 scales: {
                     x: { title: { display: true, text: 'Time', font: { size: 16 } } },
@@ -99,7 +106,7 @@ dashboard_html = """
 </html>
 """
 
-# Receive ESP32 data
+# Endpoint to receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     data = request.json
