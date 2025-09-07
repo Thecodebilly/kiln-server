@@ -128,29 +128,41 @@ def update_data():
 def dashboard():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
+    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY timestamp ASC")
     rows = c.fetchall()
     conn.close()
 
     devices = {}
-    timestamps_set = set()
+    all_timestamps = []
+
+    # Collect unique timestamps
     for device_id, temp, ts in rows:
-        timestamps_set.add(ts)
+        if ts not in all_timestamps:
+            all_timestamps.append(ts)
+
+    # Prepare device histories
+    for device_id, temp, ts in rows:
         if device_id not in devices:
             devices[device_id] = {
-                "history": [],
+                "history": [None] * len(all_timestamps),
                 "latest": temp,
                 "min": temp,
                 "max": temp,
                 "color": colors[len(devices) % len(colors)]
             }
-        devices[device_id]["history"].append(temp)
+        # Fill in temperature at correct index
+        index = all_timestamps.index(ts)
+        devices[device_id]["history"][index] = temp
         devices[device_id]["latest"] = temp
         devices[device_id]["min"] = min(devices[device_id]["min"], temp)
         devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
-    timestamps = sorted(list(timestamps_set))
-    return render_template_string(dashboard_html, devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
+    return render_template_string(
+        dashboard_html,
+        devices=devices,
+        timestamps=all_timestamps,
+        threshold=HIGH_TEMP_THRESHOLD
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
