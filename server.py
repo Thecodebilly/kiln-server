@@ -4,8 +4,9 @@ import sqlite3
 
 app = Flask(__name__)
 DB_FILE = "temperature.db"
+HIGH_TEMP_THRESHOLD = 1000  # Change this to your threshold
 
-# Initialize SQLite
+# Initialize SQLite database
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -22,6 +23,7 @@ def init_db():
 
 init_db()
 
+# Dashboard HTML
 dashboard_html = """
 <html>
 <head>
@@ -37,11 +39,14 @@ dashboard_html = """
         th, td { padding: 10px; border: 1px solid #999; }
         th { background: #555; color: white; }
         td { background: white; text-align: center; }
+        .high { background: #ff4c4c; color: white; font-weight: bold; }
+        button { margin-top: 10px; padding: 5px 10px; font-size: 16px; }
     </style>
 </head>
 <body>
     <h1>ESP32 Temperature Dashboard</h1>
     <canvas id="tempChart"></canvas>
+    <button onclick="resetZoom()">Reset Zoom</button>
 
     <h2>Device Values</h2>
     <table>
@@ -52,7 +57,7 @@ dashboard_html = """
             <th>Max Temp</th>
         </tr>
         {% for device, data in devices.items() %}
-        <tr>
+        <tr class="{{ 'high' if data.latest > threshold else '' }}">
             <td>{{ device }}</td>
             <td>{{ data.latest }}</td>
             <td>{{ data.min }}</td>
@@ -62,6 +67,9 @@ dashboard_html = """
     </table>
 
     <script>
+        // Register zoom plugin
+        Chart.register(ChartZoom);
+
         const ctx = document.getElementById('tempChart').getContext('2d');
         const labels = {{ timestamps|safe }};
         const datasets = [];
@@ -87,17 +95,20 @@ dashboard_html = """
                         zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
                     }
                 }
-            },
-            plugins: [ChartZoomPlugin]
+            }
         });
+
+        function resetZoom() {
+            tempChart.resetZoom();
+        }
     </script>
 </body>
 </html>
 """
 
-
 colors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta"]
 
+# Endpoint to receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     content = request.json
@@ -116,6 +127,27 @@ def update_data():
 
     return jsonify({"status": "ok"})
 
+# JSON API endpoint
+@app.route('/get', methods=['GET'])
+def get_data():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
+    rows = c.fetchall()
+    conn.close()
+
+    data = {}
+    for device_id, temp, timestamp in rows:
+        if device_id not in data:
+            data[device_id] = {"history": [], "latest": temp, "min": temp, "max": temp}
+        data[device_id]["history"].append({"temperature": temp, "timestamp": timestamp})
+        data[device_id]["latest"] = temp
+        data[device_id]["min"] = min(data[device_id]["min"], temp)
+        data[device_id]["max"] = max(data[device_id]["max"], temp)
+
+    return jsonify(data)
+
+# Dashboard endpoint
 @app.route('/dashboard', methods=['GET'])
 def dashboard():
     conn = sqlite3.connect(DB_FILE)
@@ -140,26 +172,7 @@ def dashboard():
         devices[device_id]["min"] = min(devices[device_id]["min"], temp)
         devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
-    return render_template_string(dashboard_html, devices=devices, timestamps=all_timestamps)
-
-@app.route('/get', methods=['GET'])
-def get_data():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
-    rows = c.fetchall()
-    conn.close()
-
-    data = {}
-    for device_id, temp, timestamp in rows:
-        if device_id not in data:
-            data[device_id] = {"history": [], "latest": temp, "min": temp, "max": temp}
-        data[device_id]["history"].append({"temperature": temp, "timestamp": timestamp})
-        data[device_id]["latest"] = temp
-        data[device_id]["min"] = min(data[device_id]["min"], temp)
-        data[device_id]["max"] = max(data[device_id]["max"], temp)
-
-    return jsonify(data)
+    return render_template_string(dashboard_html, devices=devices, timestamps=all_timestamps, threshold=HIGH_TEMP_THRESHOLD)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
