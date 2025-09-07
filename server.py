@@ -4,8 +4,8 @@ import sqlite3
 
 app = Flask(__name__)
 DB_FILE = "temperature.db"
-HIGH_TEMP_THRESHOLD = 1000  # Change as needed
-colors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta"]
+HIGH_TEMP_THRESHOLD = 5000
+colors = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 
 # Initialize SQLite DB
 def init_db():
@@ -24,21 +24,22 @@ def init_db():
 
 init_db()
 
-# Dashboard template
 dashboard_html = """
 <html>
 <head>
-    <title>ESP32 Temperature Dashboard</title>
+    <title>Temperature Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial; text-align: center; background: #f2f2f2; }
-        h1 { color: #333; }
-        canvas { max-width: 900px; margin: auto; display: block; }
-        table { margin: auto; border-collapse: collapse; width: 60%; margin-top: 20px; }
-        th, td { padding: 10px; border: 1px solid #999; }
-        th { background: #555; color: white; }
-        td { background: white; text-align: center; }
-        .high { background: #ff4c4c; color: white; font-weight: bold; }
+        body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
+        h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
+        canvas { max-width: 900px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
+        table { margin: 20px auto; border-collapse: collapse; width: 70%; font-size: 1.2em; }
+        th, td { padding: 12px 15px; border: 1px solid #ccc; text-align: center; }
+        th { background: #4CAF50; color: white; font-size: 1.2em; }
+        tr:nth-child(even) { background: #f2f2f2; }
+        .high { background: #ff4c4c !important; color: white; font-weight: bold; }
+        .device-name { font-weight: bold; color: #333; }
+        .footer { margin-top: 40px; font-size: 0.9em; color: #666; }
     </style>
 </head>
 <body>
@@ -50,13 +51,15 @@ dashboard_html = """
         <tr><th>Device</th><th>Latest</th><th>Min</th><th>Max</th></tr>
         {% for device, data in devices.items() %}
         <tr class="{{ 'high' if data.latest > threshold else '' }}">
-            <td>{{ device }}</td>
+            <td class="device-name">{{ device }}</td>
             <td>{{ data.latest }}</td>
             <td>{{ data.min }}</td>
             <td>{{ data.max }}</td>
         </tr>
         {% endfor %}
     </table>
+
+    <div class="footer">Updated automatically from ESP32 devices.</div>
 
     <script>
         const ctx = document.getElementById('tempChart').getContext('2d');
@@ -68,8 +71,11 @@ dashboard_html = """
             label: '{{ device }}',
             data: {{ data.history|safe }},
             borderColor: '{{ data.color }}',
+            backgroundColor: '{{ data.color }}55', // semi-transparent fill if needed
             fill: false,
-            tension: 0.1
+            tension: 0.2,
+            pointRadius: 4,
+            pointHoverRadius: 6
         });
         {% endfor %}
 
@@ -78,7 +84,14 @@ dashboard_html = """
             data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true,
-                scales: { y: { beginAtZero: true } }
+                plugins: {
+                    legend: { position: 'top', labels: { font: { size: 16 } } },
+                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Time', font: { size: 16 } } },
+                    y: { beginAtZero: true, title: { display: true, text: 'Temperature', font: { size: 16 } } }
+                }
             }
         });
     </script>
