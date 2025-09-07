@@ -7,7 +7,7 @@ DB_FILE = "temperature.db"
 HIGH_TEMP_THRESHOLD = 1000  # Change as needed
 colors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta"]
 
-# Initialize SQLite database
+# Initialize SQLite DB
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -86,7 +86,7 @@ dashboard_html = """
 </html>
 """
 
-# Endpoint to receive ESP32 data
+# Receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     data = request.json
@@ -103,26 +103,7 @@ def update_data():
     conn.close()
     return jsonify({"status": "ok"})
 
-# JSON API endpoint
-@app.route('/get', methods=['GET'])
-def get_data():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
-    rows = c.fetchall()
-    conn.close()
-
-    data = {}
-    for device_id, temp, ts in rows:
-        if device_id not in data:
-            data[device_id] = {"history": [], "latest": temp, "min": temp, "max": temp}
-        data[device_id]["history"].append({"temperature": temp, "timestamp": ts})
-        data[device_id]["latest"] = temp
-        data[device_id]["min"] = min(data[device_id]["min"], temp)
-        data[device_id]["max"] = max(data[device_id]["max"], temp)
-    return jsonify(data)
-
-# Dashboard endpoint
+# Dashboard
 @app.route('/dashboard')
 def dashboard():
     conn = sqlite3.connect(DB_FILE)
@@ -136,7 +117,13 @@ def dashboard():
     for device_id, temp, ts in rows:
         timestamps_set.add(ts)
         if device_id not in devices:
-            devices[device_id] = {"history": [], "latest": temp, "min": temp, "max": temp, "color": colors[len(devices) % len(colors)]}
+            devices[device_id] = {
+                "history": [],
+                "latest": temp,
+                "min": temp,
+                "max": temp,
+                "color": colors[len(devices) % len(colors)]
+            }
         devices[device_id]["history"].append(temp)
         devices[device_id]["latest"] = temp
         devices[device_id]["min"] = min(devices[device_id]["min"], temp)
