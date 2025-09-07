@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_file
 from datetime import datetime
 import sqlite3
 import csv
@@ -49,6 +49,8 @@ dashboard_html = """
         .high { background: #ff4c4c !important; color: white; font-weight: bold; }
         .device-name { font-weight: bold; color: #333; }
         .footer { margin-top: 40px; font-size: 0.9em; color: #666; }
+        .download-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; margin-bottom: 20px; }
+        .download-btn:hover { background: #45a049; }
     </style>
 </head>
 <body>
@@ -67,6 +69,8 @@ dashboard_html = """
         {% endfor %}
     </table>
 
+    <button class="download-btn" onclick="window.location.href='/download_csv'">Download CSV</button>
+
     <canvas id="tempChart"></canvas>
 
     <div class="footer">Updated automatically from ESP32 devices.</div>
@@ -81,7 +85,7 @@ dashboard_html = """
             label: '{{ device }}',
             data: {{ data.history|safe }},
             borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55', // semi-transparent fill
+            backgroundColor: '{{ data.color }}55',
             fill: false,
             tension: 0.2,
             pointRadius: 4,
@@ -162,6 +166,11 @@ def dashboard():
 
     timestamps = sorted(list(timestamps_set))
     return render_template_string(dashboard_html, devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
+
+# CSV download endpoint
+@app.route('/download_csv')
+def download_csv():
+    return send_file(CSV_FILE, mimetype='text/csv', as_attachment=True, download_name='temperature.csv')
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
