@@ -132,26 +132,21 @@ def dashboard():
     rows = c.fetchall()
     conn.close()
 
+    # Sort timestamps
+    timestamps = sorted(list({ts for _, _, ts in rows}))
+
     devices = {}
-    all_timestamps = []
-
-    # Collect unique timestamps
-    for device_id, temp, ts in rows:
-        if ts not in all_timestamps:
-            all_timestamps.append(ts)
-
-    # Prepare device histories
     for device_id, temp, ts in rows:
         if device_id not in devices:
+            # Initialize with null for all timestamps
             devices[device_id] = {
-                "history": [None] * len(all_timestamps),
+                "history": [None] * len(timestamps),
                 "latest": temp,
                 "min": temp,
                 "max": temp,
                 "color": colors[len(devices) % len(colors)]
             }
-        # Fill in temperature at correct index
-        index = all_timestamps.index(ts)
+        index = timestamps.index(ts)
         devices[device_id]["history"][index] = temp
         devices[device_id]["latest"] = temp
         devices[device_id]["min"] = min(devices[device_id]["min"], temp)
@@ -160,9 +155,10 @@ def dashboard():
     return render_template_string(
         dashboard_html,
         devices=devices,
-        timestamps=all_timestamps,
+        timestamps=timestamps,
         threshold=HIGH_TEMP_THRESHOLD
     )
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
