@@ -32,7 +32,7 @@ dashboard_html = """
     <style>
         body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
         h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
-        canvas { max-width: 900px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
+        canvas { width: 90%; height: 500px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
         table { margin: 20px auto; border-collapse: collapse; width: 70%; font-size: 1.2em; }
         th, td { padding: 12px 15px; border: 1px solid #ccc; text-align: center; }
         th { background: #4CAF50; color: white; font-size: 1.2em; }
