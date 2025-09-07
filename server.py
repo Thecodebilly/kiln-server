@@ -27,9 +27,8 @@ init_db()
 dashboard_html = """
 <html>
 <head>
-    <title>ESP32 Temperature Dashboard</title>
+    <title>Temperature Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.1.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
         h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
@@ -63,8 +62,6 @@ dashboard_html = """
     <div class="footer">Updated automatically from ESP32 devices.</div>
 
     <script>
-        Chart.register(ChartZoom); // Register zoom plugin
-
         const ctx = document.getElementById('tempChart').getContext('2d');
         const labels = {{ timestamps|safe }};
         const datasets = [];
@@ -74,7 +71,7 @@ dashboard_html = """
             label: '{{ device }}',
             data: {{ data.history|safe }},
             borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55',
+            backgroundColor: '{{ data.color }}55', // semi-transparent fill if needed
             fill: false,
             tension: 0.2,
             pointRadius: 4,
@@ -89,11 +86,7 @@ dashboard_html = """
                 responsive: true,
                 plugins: {
                     legend: { position: 'top', labels: { font: { size: 16 } } },
-                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } },
-                    zoom: {
-                        pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' }, // Pan along X-axis with Ctrl
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' } // Zoom along X-axis
-                    }
+                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } }
                 },
                 scales: {
                     x: { title: { display: true, text: 'Time', font: { size: 16 } } },
@@ -106,7 +99,7 @@ dashboard_html = """
 </html>
 """
 
-# Endpoint to receive ESP32 data
+# Receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     data = request.json
@@ -128,37 +121,29 @@ def update_data():
 def dashboard():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY timestamp ASC")
+    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
     rows = c.fetchall()
     conn.close()
 
-    # Sort timestamps
-    timestamps = sorted(list({ts for _, _, ts in rows}))
-
     devices = {}
+    timestamps_set = set()
     for device_id, temp, ts in rows:
+        timestamps_set.add(ts)
         if device_id not in devices:
-            # Initialize with null for all timestamps
             devices[device_id] = {
-                "history": [None] * len(timestamps),
+                "history": [],
                 "latest": temp,
                 "min": temp,
                 "max": temp,
                 "color": colors[len(devices) % len(colors)]
             }
-        index = timestamps.index(ts)
-        devices[device_id]["history"][index] = temp
+        devices[device_id]["history"].append(temp)
         devices[device_id]["latest"] = temp
         devices[device_id]["min"] = min(devices[device_id]["min"], temp)
         devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
-    return render_template_string(
-        dashboard_html,
-        devices=devices,
-        timestamps=timestamps,
-        threshold=HIGH_TEMP_THRESHOLD
-    )
-
+    timestamps = sorted(list(timestamps_set))
+    return render_template_string(dashboard_html, devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
