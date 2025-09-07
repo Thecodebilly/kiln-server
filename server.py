@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify, render_template_string
 from datetime import datetime
 import sqlite3
+import csv
+import os
 
 app = Flask(__name__)
 DB_FILE = "temperature.db"
+CSV_FILE = "temperature.csv"
 HIGH_TEMP_THRESHOLD = 5000
 colors = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 
@@ -23,6 +26,12 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Initialize CSV file with header if it doesn't exist
+if not os.path.exists(CSV_FILE):
+    with open(CSV_FILE, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "device_id", "temperature"])
 
 dashboard_html = """
 <html>
@@ -44,7 +53,6 @@ dashboard_html = """
 </head>
 <body>
     <h1>ESP32 Temperature Dashboard</h1>
-    <canvas id="tempChart"></canvas>
 
     <h2>Device Values</h2>
     <table>
@@ -59,6 +67,8 @@ dashboard_html = """
         {% endfor %}
     </table>
 
+    <canvas id="tempChart"></canvas>
+
     <div class="footer">Updated automatically from ESP32 devices.</div>
 
     <script>
@@ -71,7 +81,7 @@ dashboard_html = """
             label: '{{ device }}',
             data: {{ data.history|safe }},
             borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55', // semi-transparent fill if needed
+            backgroundColor: '{{ data.color }}55', // semi-transparent fill
             fill: false,
             tension: 0.2,
             pointRadius: 4,
@@ -108,12 +118,20 @@ def update_data():
     if temp is None:
         return jsonify({"status": "error", "message": "No temperature provided"}), 400
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Write to SQLite
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("INSERT INTO readings (device_id, temperature, timestamp) VALUES (?, ?, ?)",
               (device_id, temp, timestamp))
     conn.commit()
     conn.close()
+
+    # Append to CSV
+    with open(CSV_FILE, mode='a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([timestamp, device_id, temp])
+
     return jsonify({"status": "ok"})
 
 # Dashboard
