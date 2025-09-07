@@ -37,6 +37,7 @@ dashboard_html = """
 <html>
 <head>
     <title>Temperature Dashboard</title>
+    <meta http-equiv="refresh" content="10"> <!-- Auto-refresh every 10 seconds -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
