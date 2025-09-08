@@ -10,6 +10,7 @@ CSV_FILE = "temperature.csv"
 HIGH_TEMP_THRESHOLD = 5000
 colors = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 
+
 # Initialize SQLite DB
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -17,6 +18,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS readings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kiln_id TEXT,
             device_id TEXT,
             temperature INTEGER,
             timestamp TEXT
@@ -25,13 +27,14 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
 
 # Initialize CSV file with header if it doesn't exist
 if not os.path.exists(CSV_FILE):
     with open(CSV_FILE, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["timestamp", "device_id", "temperature"])
+        writer.writerow(["timestamp", "kiln_id", "device_id", "temperature"])
 
 dashboard_html = """
 <html>
@@ -43,21 +46,35 @@ dashboard_html = """
         body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
         h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
         canvas { width: 90%; height: 500px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
-        table { margin: 20px auto; border-collapse: collapse; width: 70%; font-size: 1.2em; }
+        table { margin: 20px auto; border-collapse: collapse; width: 80%; font-size: 1.2em; }
         th, td { padding: 12px 15px; border: 1px solid #ccc; text-align: center; }
         th { background: #4CAF50; color: white; font-size: 1.2em; }
         tr:nth-child(even) { background: #f2f2f2; }
         .high { background: #ff4c4c !important; color: white; font-weight: bold; }
         .device-name { font-weight: bold; color: #333; }
+        .kiln-select-form { margin: 20px; font-size: 1.2em; }
         .footer { margin-top: 40px; font-size: 0.9em; color: #666; }
         .download-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; margin-bottom: 20px; }
         .download-btn:hover { background: #45a049; }
     </style>
 </head>
 <body>
-    <h1>ESP32 Temperature Dashboard</h1>
+    <h1>Temperature Dashboard</h1>
 
-    <h2>Device Values</h2>
+    <div class="kiln-select-form">
+        <form method="get" action="/dashboard">
+            <label for="kiln-select">Select Kiln:</label>
+            <select id="kiln-select" name="kiln_id" onchange="this.form.submit()">
+                {% for kiln in all_kilns %}
+                    <option value="{{ kiln }}" {% if kiln == selected_kiln %}selected{% endif %}>{{ kiln }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <button class="download-btn" onclick="window.location.href='/download_csv'">Download CSV</button>
+
+    {% set devices = kilns[selected_kiln] %}
     <table>
         <tr><th>Device</th><th>Latest</th><th>Min</th><th>Max</th></tr>
         {% for device, data in devices.items() %}
@@ -70,8 +87,6 @@ dashboard_html = """
         {% endfor %}
     </table>
 
-    <button class="download-btn" onclick="window.location.href='/download_csv'">Download CSV</button>
-
     <canvas id="tempChart"></canvas>
 
     <div class="footer">Updated automatically from ESP32 devices.</div>
@@ -82,16 +97,16 @@ dashboard_html = """
         const datasets = [];
 
         {% for device, data in devices.items() %}
-        datasets.push({
-            label: '{{ device }}',
-            data: {{ data.history|safe }},
-            borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55',
-            fill: false,
-            tension: 0.2,
-            pointRadius: 4,
-            pointHoverRadius: 6
-        });
+            datasets.push({
+                label: '{{ device }}',
+                data: {{ data.history|safe }},
+                borderColor: '{{ data.color }}',
+                backgroundColor: '{{ data.color }}55',
+                fill: false,
+                tension: 0.2,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            });
         {% endfor %}
 
         const tempChart = new Chart(ctx, {
@@ -114,11 +129,13 @@ dashboard_html = """
 </html>
 """
 
+
 # Receive ESP32 data
 @app.route('/update', methods=['POST'])
 def update_data():
     data = request.json
-    device_id = data.get("device_id", "default")
+    kiln_id = data.get("kiln_id", "default_kiln")
+    device_id = data.get("device_id", "default_device")
     temp = data.get("temperature")
     if temp is None:
         return jsonify({"status": "error", "message": "No temperature provided"}), 400
@@ -127,31 +144,42 @@ def update_data():
     # Write to SQLite
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO readings (device_id, temperature, timestamp) VALUES (?, ?, ?)",
-              (device_id, temp, timestamp))
+    c.execute("INSERT INTO readings (kiln_id, device_id, temperature, timestamp) VALUES (?, ?, ?, ?)",
+              (kiln_id, device_id, temp, timestamp))
     conn.commit()
     conn.close()
 
     # Append to CSV
     with open(CSV_FILE, mode='a', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow([timestamp, device_id, temp])
+        writer.writerow([timestamp, kiln_id, device_id, temp])
 
     return jsonify({"status": "ok"})
+
 
 # Dashboard
 @app.route('/dashboard')
 def dashboard():
+    selected_kiln = request.args.get("kiln_id")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT device_id, temperature, timestamp FROM readings ORDER BY id ASC")
+
+    # Get all readings
+    c.execute("SELECT kiln_id, device_id, temperature, timestamp FROM readings ORDER BY id ASC")
     rows = c.fetchall()
+
+    # Get all kiln IDs
+    c.execute("SELECT DISTINCT kiln_id FROM readings")
+    all_kilns = [row[0] for row in c.fetchall()]
     conn.close()
 
-    devices = {}
+    kilns = {}
     timestamps_set = set()
-    for device_id, temp, ts in rows:
+    for kiln_id, device_id, temp, ts in rows:
         timestamps_set.add(ts)
+        if kiln_id not in kilns:
+            kilns[kiln_id] = {}
+        devices = kilns[kiln_id]
         if device_id not in devices:
             devices[device_id] = {
                 "history": [],
@@ -166,12 +194,26 @@ def dashboard():
         devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
     timestamps = sorted(list(timestamps_set))
-    return render_template_string(dashboard_html, devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
+
+    # Default to first kiln if none selected
+    if not selected_kiln and kilns:
+        selected_kiln = list(kilns.keys())[0]
+
+    return render_template_string(
+        dashboard_html,
+        kilns=kilns,
+        selected_kiln=selected_kiln,
+        all_kilns=all_kilns,
+        timestamps=timestamps,
+        threshold=HIGH_TEMP_THRESHOLD
+    )
+
 
 # CSV download endpoint
 @app.route('/download_csv')
 def download_csv():
     return send_file(CSV_FILE, mimetype='text/csv', as_attachment=True, download_name='temperature.csv')
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
