@@ -69,7 +69,11 @@
                     tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } },
                     zoom: {
                         pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' },
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        zoom: {
+                            wheel: { enabled: true, speed: 0.05 },   // reduced zoom sensitivity
+                            pinch: { enabled: true, speed: 0.05 },   // reduced pinch sensitivity
+                            mode: 'x'
+                        }
                     }
                 },
                 scales: {
