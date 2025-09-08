@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, send_file
+from flask import Flask, request, jsonify, render_template, send_file
 from datetime import datetime
 import sqlite3
 import csv
@@ -32,87 +32,6 @@ if not os.path.exists(CSV_FILE):
     with open(CSV_FILE, mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["timestamp", "device_id", "temperature"])
-
-dashboard_html = """
-<html>
-<head>
-    <title>Temperature Dashboard</title>
-    <meta http-equiv="refresh" content="10"> <!-- Auto-refresh every 10 seconds -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
-        h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
-        canvas { width: 90%; height: 500px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
-        table { margin: 20px auto; border-collapse: collapse; width: 70%; font-size: 1.2em; }
-        th, td { padding: 12px 15px; border: 1px solid #ccc; text-align: center; }
-        th { background: #4CAF50; color: white; font-size: 1.2em; }
-        tr:nth-child(even) { background: #f2f2f2; }
-        .high { background: #ff4c4c !important; color: white; font-weight: bold; }
-        .device-name { font-weight: bold; color: #333; }
-        .footer { margin-top: 40px; font-size: 0.9em; color: #666; }
-        .download-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; margin-bottom: 20px; }
-        .download-btn:hover { background: #45a049; }
-    </style>
-</head>
-<body>
-    <h1>ESP32 Temperature Dashboard</h1>
-
-    <h2>Device Values</h2>
-    <table>
-        <tr><th>Device</th><th>Latest</th><th>Min</th><th>Max</th></tr>
-        {% for device, data in devices.items() %}
-        <tr class="{{ 'high' if data.latest > threshold else '' }}">
-            <td class="device-name">{{ device }}</td>
-            <td>{{ data.latest }}</td>
-            <td>{{ data.min }}</td>
-            <td>{{ data.max }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-
-    <button class="download-btn" onclick="window.location.href='/download_csv'">Download CSV</button>
-
-    <canvas id="tempChart"></canvas>
-
-    <div class="footer">Updated automatically from ESP32 devices.</div>
-
-    <script>
-        const ctx = document.getElementById('tempChart').getContext('2d');
-        const labels = {{ timestamps|safe }};
-        const datasets = [];
-
-        {% for device, data in devices.items() %}
-        datasets.push({
-            label: '{{ device }}',
-            data: {{ data.history|safe }},
-            borderColor: '{{ data.color }}',
-            backgroundColor: '{{ data.color }}55',
-            fill: false,
-            tension: 0.2,
-            pointRadius: 4,
-            pointHoverRadius: 6
-        });
-        {% endfor %}
-
-        const tempChart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: labels, datasets: datasets },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 16 } } },
-                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } }
-                },
-                scales: {
-                    x: { title: { display: true, text: 'Time', font: { size: 16 } } },
-                    y: { beginAtZero: true, title: { display: true, text: 'Temperature', font: { size: 16 } } }
-                }
-            }
-        });
-    </script>
-</body>
-</html>
-"""
 
 # Receive ESP32 data
 @app.route('/update', methods=['POST'])
@@ -166,7 +85,7 @@ def dashboard():
         devices[device_id]["max"] = max(devices[device_id]["max"], temp)
 
     timestamps = sorted(list(timestamps_set))
-    return render_template_string(dashboard_html, devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
+    return render_template('dashboard.html', devices=devices, timestamps=timestamps, threshold=HIGH_TEMP_THRESHOLD)
 
 # CSV download endpoint
 @app.route('/download_csv')
