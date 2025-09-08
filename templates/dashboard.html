@@ -1,22 +1,116 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>ESP32 Temperature Dashboard</title>
     <meta http-equiv="refresh" content="10">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
-        body { font-family: 'Arial', sans-serif; text-align: center; background: #f9f9f9; color: #333; }
-        h1 { font-size: 2.5em; color: #444; margin-bottom: 10px; }
-        canvas { width: 90%; height: 500px; margin: 20px auto; display: block; background: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 10px; }
-        table { margin: 20px auto; border-collapse: collapse; width: 70%; font-size: 1.2em; }
-        th, td { padding: 12px 15px; border: 1px solid #ccc; text-align: center; }
-        th { background: #4CAF50; color: white; font-size: 1.2em; }
-        tr:nth-child(even) { background: #f2f2f2; }
-        .high { background: #ff4c4c !important; color: white; font-weight: bold; }
-        .device-name { font-weight: bold; color: #333; }
-        .footer { margin-top: 40px; font-size: 0.9em; color: #666; }
-        .download-btn { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; margin-bottom: 20px; }
-        .download-btn:hover { background: #45a049; }
+        /* Global Styles */
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: #f4f6f8;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            font-size: 2.8em;
+            color: #2c3e50;
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            color: #34495e;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        /* Table Styles */
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 75%;
+            font-size: 1.1em;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+
+        th {
+            background: #27ae60;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        tr:hover {
+            background: #e0f7fa;
+        }
+
+        .high {
+            background: #e74c3c !important;
+            color: white;
+            font-weight: bold;
+        }
+
+        .device-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        /* Button Styles */
+        .download-btn {
+            background: #27ae60;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #219150;
+        }
+
+        /* Canvas Styles */
+        canvas {
+            width: 90%;
+            max-width: 1200px;
+            height: 500px;
+            margin: 30px auto;
+            display: block;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
     </style>
 </head>
 <body>
@@ -24,7 +118,12 @@
 
     <h2>Device Values</h2>
     <table>
-        <tr><th>Device</th><th>Latest</th><th>Min</th><th>Max</th></tr>
+        <tr>
+            <th>Device</th>
+            <th>Latest</th>
+            <th>Min</th>
+            <th>Max</th>
+        </tr>
         {% for device, data in devices.items() %}
         <tr class="{{ 'high' if data.latest > threshold else '' }}">
             <td class="device-name">{{ device }}</td>
@@ -65,13 +164,21 @@
             options: {
                 responsive: true,
                 plugins: {
-                    legend: { position: 'top', labels: { font: { size: 16 } } },
-                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 14 } },
+                    legend: {
+                        position: 'top',
+                        labels: { font: { size: 16 } }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 14 }
+                    },
                     zoom: {
                         pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' },
                         zoom: {
-                            wheel: { enabled: true, speed: 0.05 },   // reduced zoom sensitivity
-                            pinch: { enabled: true, speed: 0.05 },   // reduced pinch sensitivity
+                            wheel: { enabled: true, speed: 0.05 },
+                            pinch: { enabled: true, speed: 0.05 },
                             mode: 'x'
                         }
                     }
